@@ -185,11 +185,14 @@ export const syncFromEzone = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let { name, label, minDeposit, maxDeposit, active } = req.body;
+    let { name, label, minDeposit, maxDeposit, active, note, fee, dailyLimit } =
+      req.body;
     const iconPath = req.iconPath;
 
     name = name?.trim();
     label = label?.trim();
+    const normalizedNote =
+      note === undefined || note === null ? null : String(note).trim() || null;
 
     if (!name) {
       return res.status(400).json({ code: "PAYMENT_METHOD_NAME_REQUIRED" });
@@ -206,6 +209,12 @@ export const createOne = async (req, res) => {
       maxDeposit === "" || maxDeposit === null || maxDeposit === undefined
         ? null
         : Number(maxDeposit);
+    const parsedFee =
+      fee === "" || fee === null || fee === undefined ? 0 : Number(fee);
+    const parsedDailyLimit =
+      dailyLimit === "" || dailyLimit === null || dailyLimit === undefined
+        ? null
+        : Number(dailyLimit);
     if (!Number.isFinite(parsedMin) || parsedMin < 0) {
       return res
         .status(400)
@@ -218,6 +227,17 @@ export const createOne = async (req, res) => {
       return res
         .status(400)
         .json({ code: "PAYMENT_METHOD_MAX_DEPOSIT_INVALID" });
+    }
+    if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+      return res.status(400).json({ code: "PAYMENT_METHOD_FEE_INVALID" });
+    }
+    if (
+      parsedDailyLimit !== null &&
+      (!Number.isFinite(parsedDailyLimit) || parsedDailyLimit < 0)
+    ) {
+      return res
+        .status(400)
+        .json({ code: "PAYMENT_METHOD_DAILY_LIMIT_INVALID" });
     }
 
     const existing = await PaymentMethod.findOne({ name });
@@ -238,6 +258,9 @@ export const createOne = async (req, res) => {
       maxDeposit: parsedMax,
       active: typeof normalizedActive === "boolean" ? normalizedActive : true,
       order: Number(lastMethod?.order ?? 0) + 1,
+      note: normalizedNote,
+      fee: parsedFee,
+      dailyLimit: parsedDailyLimit,
     });
 
     await paymentMethod.save();
@@ -254,7 +277,8 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let { name, label, minDeposit, maxDeposit, active } = req.body;
+    let { name, label, minDeposit, maxDeposit, active, note, fee, dailyLimit } =
+      req.body;
     const iconPath = req.iconPath;
 
     const paymentMethod = await PaymentMethod.findById(id);
@@ -306,6 +330,33 @@ export const updateOne = async (req, res) => {
           .json({ code: "PAYMENT_METHOD_MAX_DEPOSIT_INVALID" });
       }
       paymentMethod.maxDeposit = parsedMax;
+    }
+
+    if (note !== undefined) {
+      paymentMethod.note =
+        note === null || note === "" ? null : String(note).trim() || null;
+    }
+
+    if (fee !== undefined) {
+      const parsedFee = fee === "" || fee === null ? 0 : Number(fee);
+      if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+        return res.status(400).json({ code: "PAYMENT_METHOD_FEE_INVALID" });
+      }
+      paymentMethod.fee = parsedFee;
+    }
+
+    if (dailyLimit !== undefined) {
+      const parsedDailyLimit =
+        dailyLimit === "" || dailyLimit === null ? null : Number(dailyLimit);
+      if (
+        parsedDailyLimit !== null &&
+        (!Number.isFinite(parsedDailyLimit) || parsedDailyLimit < 0)
+      ) {
+        return res
+          .status(400)
+          .json({ code: "PAYMENT_METHOD_DAILY_LIMIT_INVALID" });
+      }
+      paymentMethod.dailyLimit = parsedDailyLimit;
     }
 
     if (iconPath !== undefined) {

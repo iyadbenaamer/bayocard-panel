@@ -42,6 +42,8 @@ const translatePaymentMethodError = (code, fallback) => {
     PAYMENT_METHOD_MIN_DEPOSIT_INVALID: "الحد الأدنى للشحن غير صالح.",
     PAYMENT_METHOD_MAX_DEPOSIT_INVALID:
       "الحد الأقصى للشحن يجب أن يكون أكبر من الحد الأدنى.",
+    PAYMENT_METHOD_DAILY_LIMIT_INVALID: "حد اليوم للمستخدم غير صالح.",
+    PAYMENT_METHOD_FEE_INVALID: "قيمة الرسوم غير صالحة.",
     PAYMENT_METHOD_NOT_FOUND: "وسيلة الدفع غير موجودة.",
   };
   return map[code] || fallback || code || "حدث خطأ. حاول مرة أخرى.";
@@ -62,6 +64,11 @@ const PaymentMethodForm = ({
   const [maxDeposit, setMaxDeposit] = useState(
     initialValues?.maxDeposit?.toString() ?? "",
   );
+  const [dailyLimit, setDailyLimit] = useState(
+    initialValues?.dailyLimit?.toString() ?? "",
+  );
+  const [note, setNote] = useState(initialValues?.note ?? "");
+  const [fee, setFee] = useState(initialValues?.fee?.toString() ?? "");
   const [active, setActive] = useState(initialValues?.active ?? true);
   const [dialogError, setDialogError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,6 +98,22 @@ const PaymentMethodForm = ({
           onChange={(event) => setLabel(event.target.value)}
           placeholder="مثال: إدفعلي"
         />
+        <CustomInput
+          label="حد اليوم لكل مستخدم (اختياري)"
+          dir="ltr"
+          type="number"
+          min="0"
+          value={dailyLimit}
+          onChange={(event) => setDailyLimit(event.target.value)}
+          placeholder="200"
+        />
+        <CustomInput
+          label="ملاحظة الوسيلة (اختياري)"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="مثال: يتم خصم 5% عند الشحن"
+          maxLength={200}
+        />
         <div className="flex gap-3">
           <CustomInput
             label="الحد الأدنى للشحن"
@@ -109,6 +132,16 @@ const PaymentMethodForm = ({
             placeholder="5000"
           />
         </div>
+        <CustomInput
+          label="نسبة الرسوم (0.05 = 5%)"
+          dir="ltr"
+          type="number"
+          step="0.01"
+          min="0"
+          value={fee}
+          onChange={(event) => setFee(event.target.value)}
+          placeholder="0.05"
+        />
         <ToggleSwitch label="مفعّل" checked={active} onChange={setActive} />
       </div>
       {dialogError && (
@@ -141,6 +174,9 @@ const PaymentMethodForm = ({
             }
             const parsedMin = Number(minDeposit);
             const parsedMax = Number(maxDeposit);
+            const parsedFee = Number(fee);
+            const parsedDailyLimit =
+              dailyLimit.trim() === "" ? null : Number(dailyLimit);
             if (!Number.isFinite(parsedMin) || parsedMin < 0) {
               setDialogError("الحد الأدنى للشحن غير صالح.");
               return;
@@ -154,6 +190,17 @@ const PaymentMethodForm = ({
               );
               return;
             }
+            if (fee.trim() && (!Number.isFinite(parsedFee) || parsedFee < 0)) {
+              setDialogError("قيمة الرسوم غير صالحة.");
+              return;
+            }
+            if (
+              dailyLimit.trim() &&
+              (!Number.isFinite(parsedDailyLimit) || parsedDailyLimit < 0)
+            ) {
+              setDialogError("حد اليوم للمستخدم غير صالح.");
+              return;
+            }
             setIsSubmitting(true);
             setDialogError("");
             const result = await onSubmit({
@@ -162,6 +209,9 @@ const PaymentMethodForm = ({
               icon,
               minDeposit: parsedMin,
               maxDeposit: maxDeposit.trim() ? parsedMax : null,
+              dailyLimit: dailyLimit.trim() ? parsedDailyLimit : null,
+              note: note.trim() || null,
+              fee: fee.trim() ? parsedFee : 0,
               active,
             });
             if (result?.ok) {
@@ -316,6 +366,9 @@ const PaymentMethods = () => {
     icon,
     minDeposit,
     maxDeposit,
+    dailyLimit,
+    note,
+    fee,
     active,
   }) => {
     const formData = new FormData();
@@ -323,6 +376,9 @@ const PaymentMethods = () => {
     formData.append("label", label.trim());
     formData.append("minDeposit", String(minDeposit));
     formData.append("maxDeposit", String(maxDeposit ?? ""));
+    formData.append("dailyLimit", String(dailyLimit ?? ""));
+    formData.append("note", note ?? "");
+    formData.append("fee", String(fee ?? 0));
     formData.append("active", String(active));
     if (icon) {
       formData.append("icon", icon);
@@ -560,11 +616,21 @@ const PaymentMethods = () => {
                         {safeValue(paymentMethod.name)}
                       </TableCell>
                       <TableCell dir="ltr">
-                        {paymentMethod.maxDeposit == null
-                          ? `الحد الأدنى ${safeValue(paymentMethod.minDeposit)}`
-                          : `${safeValue(paymentMethod.minDeposit)} - ${safeValue(
-                              paymentMethod.maxDeposit,
-                            )}`}
+                        <div>
+                          {paymentMethod.maxDeposit == null
+                            ? `الحد الأدنى ${safeValue(
+                                paymentMethod.minDeposit,
+                              )}`
+                            : `${safeValue(
+                                paymentMethod.minDeposit,
+                              )} - ${safeValue(paymentMethod.maxDeposit)}`}
+                        </div>
+                        {paymentMethod.dailyLimit != null &&
+                        paymentMethod.dailyLimit !== "" ? (
+                          <div className="mt-1 text-xs text-amber-700">
+                            حد اليوم: {safeValue(paymentMethod.dailyLimit)}
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <Badge

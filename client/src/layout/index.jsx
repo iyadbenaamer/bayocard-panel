@@ -18,7 +18,7 @@ const Layout = ({ children }) => {
 
   return (
     <>
-      <div className="sticky top-0 z-40 bg-[#2c3e50] text-white lg:hidden">
+      <div className="sticky top-0 z-40 bg-[#242342] text-white lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <img src={logo} className="w-28" />
           <button
